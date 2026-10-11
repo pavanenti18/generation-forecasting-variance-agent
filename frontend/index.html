@@ -1,0 +1,291 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Power Generation Forecasting Agent</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: #f1f5f9;
+      color: #172033;
+    }
+
+    .container {
+      max-width: 850px;
+      margin: auto;
+    }
+
+    .card {
+      background: white;
+      padding: 24px;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      border: 1px solid #dbe2ea;
+    }
+
+    h1 {
+      margin-top: 0;
+      color: #12372a;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: bold;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      font-size: 15px;
+    }
+
+    button {
+      margin-top: 20px;
+      padding: 12px 18px;
+      background: #12372a;
+      color: white;
+      border: 0;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 15px;
+    }
+
+    button:disabled {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
+    #status {
+      margin-top: 16px;
+    }
+
+    .result {
+      background: #f8fafc;
+      padding: 16px;
+      margin-top: 16px;
+      border-radius: 8px;
+      border: 1px solid #e2e8f0;
+    }
+
+    .value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #12372a;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 550px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      body {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="container">
+    <section class="card">
+      <h1>Power Generation Forecasting & Variance Explanation Agent</h1>
+      <p>
+        Enter weather conditions and the supplied forecast to
+        predict generation and investigate forecast errors.
+      </p>
+
+      <form id="forecastForm">
+        <div class="grid">
+          <div>
+            <label for="irradiance">Irradiance (W/m²)</label>
+            <input id="irradiance" type="number"
+                   min="0" step="any" value="572.9" required>
+          </div>
+
+          <div>
+            <label for="wind">Wind speed (m/s)</label>
+            <input id="wind" type="number"
+                   min="0" step="any" value="4.59" required>
+          </div>
+
+          <div>
+            <label for="temperature">Temperature (°C)</label>
+            <input id="temperature" type="number"
+                   step="any" value="35.4" required>
+          </div>
+
+          <div>
+            <label for="outage">Outage flagged?</label>
+            <select id="outage">
+              <option value="0">No</option>
+              <option value="1" selected>Yes</option>
+            </select>
+          </div>
+
+          <div>
+            <label for="forecast">Supplied forecast (MWh)</label>
+            <input id="forecast" type="number"
+                   min="0" step="any" value="21.36" required>
+          </div>
+
+          <div>
+            <label for="actual">Actual generation (MWh, optional)</label>
+            <input id="actual" type="number"
+                   min="0" step="any">
+          </div>
+        </div>
+
+        <button id="submitButton" type="submit">
+          Predict and Explain
+        </button>
+      </form>
+
+      <p id="status" role="status"></p>
+    </section>
+
+    <section class="card">
+      <h2>Results</h2>
+      <div id="results">
+        Submit the form to view results.
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const form = document.getElementById("forecastForm");
+    const status = document.getElementById("status");
+    const results = document.getElementById("results");
+    const submitButton = document.getElementById("submitButton");
+
+    form.addEventListener("submit", async function (event) {
+      event.preventDefault();
+
+      const actualText = document.getElementById("actual").value;
+
+      const requestData = {
+        irradiance_wm2: Number(document.getElementById("irradiance").value),
+        wind_speed_ms: Number(document.getElementById("wind").value),
+        temperature_c: Number(document.getElementById("temperature").value),
+        outage_flag: Number(document.getElementById("outage").value),
+        forecast_mwh: Number(document.getElementById("forecast").value)
+      };
+
+      if (actualText.trim() !== "") {
+        requestData.actual_mwh = Number(actualText);
+      }
+
+      status.textContent = "Running prediction...";
+      results.textContent = "";
+      submitButton.disabled = true;
+
+      try {
+        const response = await fetch("http://127.0.0.1:8000/api/run", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestData)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(JSON.stringify(data));
+        }
+
+        const prediction = document.createElement("div");
+        prediction.className = "result";
+        prediction.innerHTML =
+          "<h3>Predicted generation</h3>" +
+          '<p class="value"></p>';
+
+        prediction.querySelector(".value").textContent =
+          data.predicted_generation_mwh + " MWh";
+
+        results.appendChild(prediction);
+
+        const comparison = document.createElement("div");
+        comparison.className = "result";
+        comparison.innerHTML =
+          "<h3>Forecast comparison</h3>" +
+          "<p>Supplied forecast: <strong></strong></p>" +
+          "<p>Prediction minus forecast: <strong></strong></p>";
+
+        comparison.querySelectorAll("strong")[0].textContent =
+          data.supplied_forecast_mwh + " MWh";
+
+        comparison.querySelectorAll("strong")[1].textContent =
+          data.prediction_vs_forecast_variance_mwh + " MWh";
+
+        results.appendChild(comparison);
+
+        if (data.explanation) {
+          const explanation = document.createElement("div");
+          explanation.className = "result";
+
+          const heading = document.createElement("h3");
+          heading.textContent = "Forecast miss explanation";
+          explanation.appendChild(heading);
+
+          const error = document.createElement("p");
+          error.textContent =
+            "Actual forecast error: " +
+            data.explanation.error_mwh + " MWh (" +
+            data.explanation.forecast_direction + ")";
+          explanation.appendChild(error);
+
+          const list = document.createElement("ul");
+
+          data.explanation.possible_drivers.forEach(function (reason) {
+            const item = document.createElement("li");
+            item.textContent = reason;
+            list.appendChild(item);
+          });
+
+          explanation.appendChild(list);
+          results.appendChild(explanation);
+        }
+        else {
+          const message = document.createElement("div");
+          message.className = "result";
+          message.textContent =
+            "Actual generation was not provided. " +
+            "Only the prediction was evaluated; forecast accuracy " +
+            "cannot be calculated without actual generation.";
+          results.appendChild(message);
+        }
+
+        status.textContent = "Prediction completed successfully.";
+      } catch (error) {
+        status.textContent =
+          "Request failed: " + error.message +
+          ". Make sure the FastAPI server is running.";
+      } finally {
+        submitButton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

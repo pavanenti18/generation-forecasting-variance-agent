@@ -1,0 +1,4 @@
+method,MAE_MWh,RMSE_MWh
+Linear Regression,6.32,7.75
+Mean Baseline,11.86,14.96
+Existing Forecast,4.6,5.17
